@@ -19,38 +19,39 @@ python oai_zib.py
 
 ## Folder/file structure
 The 507 MRI images and their labels will be saved with the following structure:
-
-save_dir \
-├── images \
-│   ├── 9001104 \
-│   │   ├── 9001104-0000.dcm \
-│   │   ├── ... \
-│   │   └── 9001104-0159.dcm \
-│   │ \
-│   ├── ... \
-│   │ \
-│   └── 9996098 \
-│       ├── 9996098-0000.dcm \
-│       ├── ... \
-│       └── 9996098-0159.dcm \
-│ \
-└── labels \
-    ├── 9001104 \
-    │   ├── 9001104-0000.png \
-    │   ├── ... \
-    │   └── 9001104-0159.png \
-	│ \
-    ├── ... \
-	│ \
-    └── 9996098 \
-        ├── 9996098-0000.png \
-        ├── ... \
-        └── 9996098-0159.png \
+```
+save_dir
+├── images
+│   ├── 9001104
+│   │   ├── 9001104-0000.dcm
+│   │   ├── ...
+│   │   └── 9001104-0159.dcm
+│   │
+│   ├── ...
+│   │
+│   └── 9996098
+│       ├── 9996098-0000.dcm
+│       ├── ...
+│       └── 9996098-0159.dcm
+│
+└── labels
+    ├── 9001104
+    │   ├── 9001104-0000.png
+    │   ├── ...
+    │   └── 9001104-0159.png
+	│
+    ├── ...
+	│
+    └── 9996098
+        ├── 9996098-0000.png
+        ├── ...
+        └── 9996098-0159.png
+```
 		
 ## Note
-Each segmentation mask contains voxels labeled as follows:
+Each segmentation mask contains voxels labeled as follows: \
 0 - background \
 1 - femoral bone \
 2 - femoral cartilage \
 3 - tibial bone \
-4 - tibial cartilage \
+4 - tibial cartilage
