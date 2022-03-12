@@ -49,8 +49,8 @@ save_dir \
 		
 ## Note
 Each segmentation mask contains voxels labeled as follows:
-0 - background \
-1 - femoral bone \
-2 - femoral cartilage \
-3 - tibial bone \
-4 - tibial cartilage \
+0 - background
+1 - femoral bone
+2 - femoral cartilage
+3 - tibial bone
+4 - tibial cartilage
