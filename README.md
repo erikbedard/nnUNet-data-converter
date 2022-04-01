@@ -7,11 +7,13 @@ To use this tool, you must first:
 2. Download the OAI-ZIB data of 507 manual segmentations from https://pubdata.zib.de/ and unzip the file (e.g. to a directory such as '~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations')
 
 ## Usage
-```python oai_zib.py oai_dir oai_zib_dir save_dir```
+1. Install the required packages listed in "requirements.txt"
+2. From a terminal window, execute the command \
+`python oai_zib.py oai_dir oai_zib_dir save_dir`
 
 Example:
 ```
-python oai_zib.py
+python oai_zib.py 
     "~/Downloads/Package_1198790/results/00m"
     "~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations"
     "~/nnUNet_raw_data_base/nnUNet_raw_data/Task500_Knee
@@ -20,14 +22,13 @@ python oai_zib.py
 ## Folder/file structure
 After conversion, the 507 MRI images and their labels have the following structure:
 ```
-Task500_Knee
+save_dir
 ├── dataset.json
 ├── imagesTr
 │   ├── knee_9001104_0000.nii.gz 
 │   ├── knee_9002430_0000.nii.gz   
 │   ├── ...
 │   └── knee_9996098_0000.nii.gz
-│
 └── labelsTr
     ├── knee_9001104.nii.gz
     ├── knee_9002430.nii.gz

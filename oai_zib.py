@@ -1,7 +1,7 @@
-
 import dicom2nifti
 import SimpleITK as sitk
 import multiprocessing
+import nibabel
 
 import sys
 import os
@@ -30,7 +30,7 @@ def main():
 
     args = parser.parse_args()
 
-    # validate oai_data_dir
+    # validate oai_dir
     dir0C2 = os.path.join(args.oai_dir, "0.C.2")
     dir0E1 = os.path.join(args.oai_dir, "0.E.1")
     if not (os.path.exists(dir0C2) and os.path.exists(dir0E1)):
@@ -39,7 +39,7 @@ def main():
         print(dir0E1)
         sys.exit("ERROR: Invalid OAI data directory was specified.")
 
-    # validate oai_zib_data_dir
+    # validate oai_zib_dir
     oai_mri_paths = os.path.join(args.oai_zib_dir, "segmentation", "doc", "oai_mri_paths.txt")
     oai_zib_masks_dir = os.path.join(args.oai_zib_dir, "segmentation", "segmentation_masks")
     if not (os.path.exists(oai_mri_paths) and os.path.exists(oai_zib_masks_dir)):
@@ -48,21 +48,23 @@ def main():
         print(oai_zib_masks_dir)
         sys.exit("ERROR: Invalid OAI-ZIB data directory was specified.")
 
-    # prepare MRIs
+    # convert MRIs
     imagesTr_dir = os.path.join(args.save_dir, "imagesTr")
     os.makedirs(imagesTr_dir, exist_ok=True)
-    prepare_mri_subset(args.oai_dir, oai_mri_paths, imagesTr_dir)
+    convert_mri_subset(args.oai_dir, oai_mri_paths, imagesTr_dir)
 
-    # prepare masks
+    # convert masks
     labelsTr_dir = os.path.join(args.save_dir, "labelsTr")
     os.makedirs(labelsTr_dir, exist_ok=True)
-    prepare_all_masks(oai_zib_masks_dir, labelsTr_dir)
+    convert_all_masks(oai_zib_masks_dir, labelsTr_dir)
+
+    align_images_and_labels(imagesTr_dir, labelsTr_dir)
 
     imagesTs_dir = None
 
     # prepare dataset JSON file
     output_file = os.path.join(args.save_dir, "dataset.json")
-    print("Creating \"" + output_file + "\"")
+    print("\nCreating \"" + output_file + "\"")
     modalities = ["MRI"]
     labels = {0: "background",
               1: "femoral bone",
@@ -82,7 +84,7 @@ def main():
     print("Finished!")
 
 
-def prepare_all_masks(oai_zib_masks_dir, save_dir):
+def convert_all_masks(oai_zib_masks_dir, save_dir):
     """
     Convert all the segmentation masks from the OAI ZIB data set to the nifti format with the naming convention required
     by nnU-Net.
@@ -108,14 +110,14 @@ def prepare_all_masks(oai_zib_masks_dir, save_dir):
     p.map(convert_mhd_to_nifti, data)
 
 
-def prepare_mri_subset(oai_data_dir, oai_mri_paths, save_dir):
+def convert_mri_subset(oai_data_dir, oai_mri_paths, save_dir):
     """
     Convert the MRIs into nifti files for which there exists a segmentation mask (as listed by the ZIB dataset). The
     naming convention required by nnU-Net is also followed.
 
     :param oai_data_dir: path of the directory where the baseline OAI data is stored (i.e. /Package_1198790/results/00m)
     :param oai_mri_paths: file path of the 'oai_mri_paths.txt' file from the OAI ZIB dataset
-    :param save_dir: directory where the nifty files will be saved
+    :param save_dir: directory where the nifti files will be saved
     """
 
     path_dict = get_mri_list(oai_mri_paths)
@@ -179,17 +181,6 @@ def convert_mhd_to_nifti(data):
     image_path = data[0]
     itk_image = sitk.ReadImage(image_path)
 
-    # swap axes so that format is consistent with DICOMs
-    np_image = sitk.GetArrayFromImage(itk_image)
-    np_image = np.swapaxes(np_image, 0, 2).copy()
-    np_image = np.rollaxis(np_image, 2, 1).copy()
-
-    spacing = itk_image.GetSpacing()
-    spacing = spacing[::-1]
-
-    itk_image = sitk.GetImageFromArray(np_image)
-    itk_image.SetSpacing(spacing)
-
     file_name = os.path.basename(image_path)
     image_id = file_name.split('.')[0]  # only keep first part of file name as the image ID
 
@@ -201,10 +192,46 @@ def convert_mhd_to_nifti(data):
     sitk.WriteImage(itk_image, new_file_path)
 
 
-#    The functions
+def align_images_and_labels(images_dir, labels_dir):
+    image_paths = glob.glob(os.path.join(images_dir, '*.nii.gz'))
+    image_paths.sort()
+
+    label_paths = glob.glob(os.path.join(labels_dir, '*.nii.gz'))
+    label_paths.sort()
+
+    # create data list for parallel processing
+    data = zip(image_paths, label_paths)
+
+    print("\nRe-aligning segmentation labels...")
+
+    # process masks
+    p = multiprocessing.Pool()
+    p.map(realign, data)
+
+
+def realign(data):
+    im_path = data[0]
+    lbl_path = data[1]
+
+    print("Re-aligning: " + lbl_path)
+
+    image = nibabel.nifti1.load(im_path)
+    label = nibabel.nifti1.load(lbl_path)
+
+
+    # swap label axes so that they are consistent with image axes
+    # label_data = label_data.astype(np.ushort) # images are ushort, so make labels the same
+    label_data = np.array(label.dataobj)
+    label_data = np.swapaxes(label_data, 0, 2).copy()
+    label_data = np.rollaxis(label_data, 1, 0).copy()
+
+    # save label with same properties as the mri image
+    label = nibabel.Nifti1Image(label_data, image.affine, header=image.header)
+    nibabel.nifti1.save(label, lbl_path)
+
+#    The following functions were copied from the nnU-Net repository:
 #       "get_identifiers_from_splitted_files()", and
 #       "generate_dataset_json()"
-#    were copied from the nnU-Net repository with some minor modifications.
 #
 #
 #    Copyright 2020 Division of Medical Image Computing, German Cancer Research Center (DKFZ), Heidelberg, Germany
@@ -220,6 +247,7 @@ def convert_mhd_to_nifti(data):
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
+
 
 def get_identifiers_from_splitted_files(folder: str):
     uniques = np.unique([i[:-12] for i in subfiles(folder, suffix='.nii.gz', join=False)])
@@ -266,10 +294,10 @@ def generate_dataset_json(output_file: str, imagesTr_dir: str, imagesTs_dir: str
     json_dict['numTraining'] = len(train_identifiers)
     json_dict['numTest'] = len(test_identifiers)
     json_dict['training'] = [
-        {'image': os.path.join(".", "imagesTr", "%s.nii.gz") % i, "label": os.path.join(".", "labelsTr", "%s.nii.gz") % i} for i
+        {'image': "./imagesTr/%s.nii.gz" % i, "label": "./labelsTr/%s.nii.gz" % i} for i
         in
         train_identifiers]
-    json_dict['test'] = [os.path.join(".", "imagesTs", "%s.nii.gz") % i for i in test_identifiers]
+    json_dict['test'] = ["./imagesTs/%s.nii.gz" % i for i in test_identifiers]
 
     if not output_file.endswith("dataset.json"):
         print("WARNING: output file name is not dataset.json! This may be intentional or not. You decide. "
