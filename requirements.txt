@@ -1,3 +1,4 @@
 SimpleITK
+dicom2nifti
+batchgenerators
 numpy
-opencv-python

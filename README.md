@@ -1,10 +1,10 @@
-# oai-zib-format
-Data formatter for organizing OAI knee MRI data and OAI-ZIB segmentations into 'images' and 'labels' folders for semenatic segmentation.
+# oai-zib-converter
+Data converter and formatter for organizing OAI knee MRI data and OAI-ZIB manual segmentations into a format and 
+structure that is compatible with nnU-Net (https://github.com/MIC-DKFZ/nnUNet).
 
-This program is used to extract/standardize the knee MRI data from the OAI data set and the segmentation labels from the OAI-ZIB dataset into 'images' and 'labels' directories.
-It is assumed that:
-1. The OAI baseline data for 4796 subjects has been downloaded from https://nda.nih.gov/oai/ and the zip file been extracted (e.g. to a directory such as '~/Downloads/Package_1198790/results/00m')
-2. The OAI-ZIB data of 507 manual segmentations has been downloaded from https://pubdata.zib.de/ and the zip file has been extract (e.g. to a directory such as '~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations')
+To use this tool, you must first:
+1. Download the OAI baseline data for 4796 subjects from https://nda.nih.gov/oai/ and unzip the file (e.g. to a directory such as '~/Downloads/Package_1198790/results/00m')
+2. Download the OAI-ZIB data of 507 manual segmentations from https://pubdata.zib.de/ and unzip the file (e.g. to a directory such as '~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations')
 
 ## Usage
 ```python oai_zib.py oai_dir oai_zib_dir save_dir```
@@ -14,38 +14,25 @@ Example:
 python oai_zib.py
     "~/Downloads/Package_1198790/results/00m"
     "~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations"
-    "~/data/oai-zib"
+    "~/nnUNet_raw_data_base/nnUNet_raw_data/Task500_Knee
 ```
 
 ## Folder/file structure
-The 507 MRI images and their labels will be saved with the following structure:
+After conversion, the 507 MRI images and their labels have the following structure:
 ```
-save_dir
-├── images
-│   ├── 9001104
-│   │   ├── 9001104-0000.dcm
-│   │   ├── ...
-│   │   └── 9001104-0159.dcm
-│   │
+Task500_Knee
+├── dataset.json
+├── imagesTr
+│   ├── knee_9001104_0000.nii.gz 
+│   ├── knee_9002430_0000.nii.gz   
 │   ├── ...
-│   │
-│   └── 9996098
-│       ├── 9996098-0000.dcm
-│       ├── ...
-│       └── 9996098-0159.dcm
+│   └── knee_9996098_0000.nii.gz
 │
-└── labels
-    ├── 9001104
-    │   ├── 9001104-0000.png
-    │   ├── ...
-    │   └── 9001104-0159.png
-    │
+└── labelsTr
+    ├── knee_9001104.nii.gz
+    ├── knee_9002430.nii.gz
     ├── ...
-    │
-    └── 9996098
-        ├── 9996098-0000.png
-        ├── ...
-        └── 9996098-0159.png
+    └── knee_9996098.nii.gz
 ```
 		
 ## Note
