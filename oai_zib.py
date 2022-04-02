@@ -222,8 +222,9 @@ def realign(data):
     # swap label axes so that they are consistent with image axes
     # label_data = label_data.astype(np.ushort) # images are ushort, so make labels the same
     label_data = np.array(label.dataobj)
-    label_data = np.swapaxes(label_data, 0, 2).copy()
-    label_data = np.rollaxis(label_data, 1, 0).copy()
+    label_data = np.swapaxes(label_data, 0, 2)
+    label_data = np.rollaxis(label_data, 1, 0)
+    label_data = np.flip(label_data, axis=1).copy()
 
     # save label with same properties as the mri image
     label = nibabel.Nifti1Image(label_data, image.affine, header=image.header)
