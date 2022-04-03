@@ -1,5 +1,4 @@
 SimpleITK==2.0.2
 dicom2nifti
-batchgenerators
 numpy
 nibabel
