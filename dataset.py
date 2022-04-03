@@ -1,3 +1,7 @@
+"""
+This module defines dataset-specific functions for reading an existing dataset and converting / consolidating / saving
+the dataset's 'image' and 'labels' files into NIFTI format and into two respective directories
+"""
 # external libraries
 import dicom2nifti
 import SimpleITK as sitk
@@ -12,37 +16,34 @@ import glob
 import multiprocessing
 from pathlib import Path
 
-# local modules
-from generate_dataset_json import generate_dataset_json
-from split_training_data import split_training_data
-from make_data_subsets import make_data_subsets
 
-
-def main():
+def parse_args():
+    """
+    MANDATORY: This function must be defined by this module.
+    CLI args can be added or modified, but all CLI args should be defined here.
+    The "save_dir" and "--task_num" args must always be defined.
+    """
 
     parser = argparse.ArgumentParser(description="Extract OAI-ZIB images and labels.")
     parser.add_argument(dest="oai_dir", type=str,
                         help="Directory where the OIA data is stored, e.g. \"~/Downloads/Package_1198790/results/00m\"")
     parser.add_argument(dest="oai_zib_dir", type=str,
                         help="Directory where OAI-ZIB data is stored, e.g. \"~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations\"")
+
+    # the following args must always be defined:
     parser.add_argument(dest="save_dir", type=str,
                         help="Directory where the dataset will be saved, e.g. \"~/data/\". A new subdirectory will be created.")
-    args = parser.parse_args()
+    parser.add_argument("--task_num", dest="task_num", type=int, default=500,
+                        help="Unique task ID used by nnU-Net (0-999)")
 
-    print("\n")
-    print("##############################")
-    print("##  OIA-ZIB Data Converter  ##")
-    print("##############################")
-    print("")
+    return parser.parse_args()
 
-    # define label classes and the names of all datasets to be created
-    # a new data subset is created for each class
-    seg_labels = {
-        0: "background",
-        1: "femoral bone",
-        2: "femoral cartilage",
-        3: "tibial bone",
-        4: "tibial cartilage"}
+
+def validate_args(args):
+    """
+    MANDATORY: This function must be defined by this module.
+    All parsed args should be validated.
+    """
 
     # validate oai_dir
     dir0C2 = os.path.join(args.oai_dir, "0.C.2")
@@ -52,15 +53,19 @@ def main():
         print(dir0C2)
         print(dir0E1)
         sys.exit("ERROR: Invalid OAI data directory was specified.")
+    print("MRIs will be copied from OAI directory:"
+          "\n  \"" + args.oai_dir + "\"\n")
 
     # validate oai_zib_dir
-    oai_mri_paths = os.path.join(args.oai_zib_dir, "segmentation", "doc", "oai_mri_paths.txt")
-    oai_zib_masks_dir = os.path.join(args.oai_zib_dir, "segmentation", "segmentation_masks")
+    oai_mri_paths = get_oai_mri_paths(args.oai_zib_dir)
+    oai_zib_masks_dir = get_oai_zib_masks_dir(args.oai_zib_dir)
     if not (os.path.exists(oai_mri_paths) and os.path.exists(oai_zib_masks_dir)):
         print("The following file and directory must exist:")
         print(oai_mri_paths)
         print(oai_zib_masks_dir)
         sys.exit("ERROR: Invalid OAI-ZIB data directory was specified.")
+    print("Segmentation labels will be copied from OAI-ZIB directory:"
+          "\n  \"" + args.oai_zib_dir + "\"\n")
 
     # validate save_dir
     try:
@@ -68,45 +73,77 @@ def main():
     except (OSError, RuntimeError):
         sys.exit("ERROR: Invalid save directory \"" + args.save_dir + "\"")
 
-    # prompt user
-    dataset_dir = os.path.join(args.save_dir, 'Task500_TotalKnee')
-    print("OAI MRI scans from:\n  \"" + args.oai_dir + "\"\n"
-          "and OAI-ZIB labels from:\n  \"" + args.oai_zib_dir + "\"\n" 
-          "will be converted and saved to:\n  \"" + dataset_dir + "\"\n")
-    input("Press Enter to continue...")
+    # validate task_num
+    if not (0 <= args.task_num < 1000):
+        sys.exit("ERROR: Task number must be between 0 and 999 \"" + args.save_dir + "\"")
 
-    # convert MRIs
-    imagesTr_dir = os.path.join(dataset_dir, "imagesTr")
-    os.makedirs(imagesTr_dir, exist_ok=True)
+
+def print_startup():
+    """
+    MANDATORY: This function must be defined by this module.
+    Modify the print statements to reflect the data being converted.
+    """
+    print("\n")
+    print("##############################")
+    print("##  OIA-ZIB Data Converter  ##")
+    print("##############################")
+    print("")
+
+
+def dataset_info():
+    """
+    MANDATORY: This function must be defined by this module.
+    Modify the r.h.s. of the dictionary fields to reflect the data.
+    """
+    info = {
+        "task_name": "TotalKnee",
+        "dataset_name": "OAI-ZIB Knee",
+        "modalities": ["MRI"],
+        "license": "",
+        "description": "MRIs from the OAI database with manual segmentations by ZIB",
+        "reference": "https://nda.nih.gov/oai/ and https://pubdata.zib.de/",
+        "release": "0.0",
+        "labels": {
+            0: "background",
+            1: "femoral bone",
+            2: "femoral cartilage",
+            3: "tibial bone",
+            4: "tibial cartilage"}
+    }
+    return info
+
+
+def create_images_labels(imagesTr_dir, labelsTr_dir, args):
+    """
+    MANDATORY: This function must be defined by this module.
+    Change the implementation as needed to ensure that:
+      1. all images are converted to NIFTI format and saved in imagesTr_dir
+      2. all labels are converted to NIFTI format and saved in labelsTr_dir
+    """
+
+    oai_mri_paths = get_oai_mri_paths(args.oai_zib_dir)
+    oai_zib_masks_dir = get_oai_zib_masks_dir(args.oai_zib_dir)
+
+    # create images
     convert_mri_subset(args.oai_dir, oai_mri_paths, imagesTr_dir)
 
-    # convert masks
-    labelsTr_dir = os.path.join(dataset_dir, "labelsTr")
-    os.makedirs(labelsTr_dir, exist_ok=True)
+    # create labels
     convert_all_masks(oai_zib_masks_dir, labelsTr_dir)
     align_images_and_labels(imagesTr_dir, labelsTr_dir)
 
-    # create separate test data
-    imagesTs_dir = os.path.join(dataset_dir, "imagesTs")
-    split_training_data(imagesTr_dir, labelsTr_dir, train_percent=0.7, seed=0)
 
-    # prepare dataset JSON file
-    output_file = os.path.join(dataset_dir, "dataset.json")
-    print("\nCreating \"" + output_file + "\"")
-    modalities = ["MRI"]
-    dataset_name = "OAI-ZIB Knee"
-    license = ""
-    dataset_description = "507 DESS MRIs from the OAI database with manual segmentations provided by ZIB"
-    dataset_reference = "https://nda.nih.gov/oai/ and https://pubdata.zib.de/"
-    dataset_release = "0.0"
+###############################################################
+# NOTE: Any of the functions below can be completely removed  #
+# or changed as needed to assist with data conversion         #
+###############################################################
 
-    generate_dataset_json(output_file, imagesTr_dir, imagesTs_dir, modalities,
-                          seg_labels, dataset_name, license, dataset_description,
-                          dataset_reference, dataset_release)
 
-    make_data_subsets(dataset_dir, seg_labels)
+def get_oai_mri_paths(oai_zib_dir):
+    return os.path.join(oai_zib_dir, "segmentation", "doc", "oai_mri_paths.txt")
 
-    print("Finished!")
+
+def get_oai_zib_masks_dir(oai_zib_dir):
+    return os.path.join(oai_zib_dir, "segmentation", "segmentation_masks")
 
 
 def convert_all_masks(oai_zib_masks_dir, save_dir):
@@ -248,7 +285,3 @@ def realign(data):
     # save label with same properties as the mri image
     label = nibabel.Nifti1Image(label_data, image.affine, header=image.header)
     nibabel.nifti1.save(label, lbl_path)
-
-
-if __name__ == '__main__':
-    main()
