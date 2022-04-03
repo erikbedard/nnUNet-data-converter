@@ -37,7 +37,9 @@ def main():
         info["license"], info["description"],
         info["reference"], info["release"])
 
-    utils.make_data_subsets(dataset_dir, info["labels"])
+    # create new single-class data subsets if applicable
+    if len(info["labels"]) > 2:
+        utils.make_data_subsets(dataset_dir, info["labels"])
 
     print("Finished!")
 

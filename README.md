@@ -7,34 +7,48 @@ To use this tool, you must first:
 2. Download the OAI-ZIB data of 507 manual segmentations from https://pubdata.zib.de/ and unzip the file (e.g. to a directory such as '~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations')
 
 ## Usage
-1. Install the required packages listed in "requirements.txt"
-2. From a terminal window, execute the command \
-`python oai_zib.py oai_dir oai_zib_dir save_dir`
+1. Download the repository: \
+`git clone https://github.com/erikbedard/oai-zib-converter.git`
+2. Install the required packages listed in "requirements.txt", e.g.: \
+`pip install -r requirements.txt`
+3. From a terminal window, execute the command: \
+`python data_converter.py oai_dir oai_zib_dir save_dir`
 
 Example:
 ```
-python oai_zib.py 
+python data_converter.py 
     "~/Downloads/Package_1198790/results/00m"
     "~/Downloads/Dataset_1__OAI-ZIB_manual_segmentations"
     "~/nnUNet_raw_data_base/nnUNet_raw_data/Task500_Knee
 ```
 
 ## Folder/file structure
-After conversion, the 507 MRI images and their labels have the following structure:
+After conversion, the images and their labels have the following train/test data structure:
 ```
 save_dir
 ├── dataset.json
 ├── imagesTr
-│   ├── knee_9001104_0000.nii.gz 
-│   ├── knee_9002430_0000.nii.gz   
+│   ├── volume1_0000.nii.gz 
+│   ├── volume2_0000.nii.gz   
 │   ├── ...
-│   └── knee_9996098_0000.nii.gz
+│
+├── imagesTs
+│   ├── volume42_0000.nii.gz 
+│   ├── volume43_0000.nii.gz   
+│   ├── ...
+│ 
+├── labelsTr
+│   ├── volume1.nii.gz
+│   ├── volume2.nii.gz
+│   ├── ...
+│
 └── labelsTr
-    ├── knee_9001104.nii.gz
-    ├── knee_9002430.nii.gz
+    ├── volume42.nii.gz
+    ├── volume43.nii.gz
     ├── ...
-    └── knee_9996098.nii.gz
 ```
+A data set is created with all segmentation classes. If there is more than one foreground class, single-class data 
+subsets are also created.
 		
 ## Note
 Each segmentation mask contains voxels labeled as follows: \
