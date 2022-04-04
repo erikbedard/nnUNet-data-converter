@@ -11,6 +11,27 @@ import random
 import math
 
 
+def get_data_subsets_dirs(original_dataset_dir, seg_labels_dict):
+    # gather info about dataset
+    dataset_name = os.path.basename(original_dataset_dir)
+    dataset_num = int(dataset_name.split("Task")[1].split("_")[0])  # Task###_name
+    save_dir = Path(original_dataset_dir).parent
+
+    data_subsets_dirs_dict = {}
+    for key in seg_labels_dict.keys():
+        if key == 0:  # ignore case (i.e., do not create a background-only dataset)
+            continue
+
+        # copy original data set as a starting point for new subset
+        dataset_num = dataset_num + 1
+        task_num = "%02d" % dataset_num
+        new_dataset_name = seg_labels_dict[key].title().replace(" ", "")  # "this label' -> "ThisLabel"
+        new_dataset_name = "Task" + task_num + "_" + new_dataset_name
+        data_subsets_dirs_dict[key] = os.path.join(save_dir, new_dataset_name)
+
+    return data_subsets_dirs_dict
+
+
 def make_data_subsets(original_dataset_dir, seg_labels_dict):
     """
     This function takes an existing multi-class segmentation dataset and creates new single-class
@@ -21,21 +42,23 @@ def make_data_subsets(original_dataset_dir, seg_labels_dict):
     :return:
     """
     # gather info about dataset
-    dataset_name = os.path.basename(original_dataset_dir)
-    dataset_num = int(dataset_name.split("Task")[1].split("_")[0])  # Task###_name
-    save_dir = Path(original_dataset_dir).parent
+    #dataset_name = os.path.basename(original_dataset_dir)
+    #dataset_num = int(dataset_name.split("Task")[1].split("_")[0])  # Task###_name
+    #save_dir = Path(original_dataset_dir).parent
+    data_subsets_dirs_dict = get_data_subsets_dirs(original_dataset_dir, seg_labels_dict)
 
     for key in seg_labels_dict.keys():
         if key == 0:  # ignore case (i.e., do not create a background-only dataset)
             continue
 
         # copy original data set as a starting point for new subset
-        dataset_num = dataset_num + 1
-        task_num = "%02d" % dataset_num
-        new_dataset_name = seg_labels_dict[key].title().replace(" ", "")  # "this label' -> "ThisLabel"
-        new_dataset_name = "Task" + task_num + "_" + new_dataset_name
-        new_dataset_dir = os.path.join(save_dir, new_dataset_name)
-        print("Creating data subset \"" + new_dataset_name + "\"")
+        #dataset_num = dataset_num + 1
+        #task_num = "%02d" % dataset_num
+        #new_dataset_name = seg_labels_dict[key].title().replace(" ", "")  # "this label' -> "ThisLabel"
+        #new_dataset_name = "Task" + task_num + "_" + new_dataset_name
+        #new_dataset_dir = os.path.join(save_dir, new_dataset_name)
+        new_dataset_dir = data_subsets_dirs_dict[key]
+        print("Creating data subset \"" + os.path.basename(new_dataset_dir) + "\"")
         print("  Copying files...")
         shutil.copytree(original_dataset_dir, new_dataset_dir)
 

@@ -1,27 +1,46 @@
 import os
+
 import dataset
 import utils
+import sys
+import argparse
 
 
 def main():
-    # start program, validate inputs, prompt user
-    info = dataset.dataset_info()
-    args = dataset.parse_args()
-    dataset.print_startup()
-    dataset.validate_args(args)
 
-    dataset_dir = "Task" + str(args.task_num) + "_" + info["task_name"]
-    dataset_dir = os.path.join(args.save_dir, dataset_dir)
+    # startup
+    parser = argparse.ArgumentParser()
+    parser.add_argument(dest="task_num", type=int,
+                        help="Task ID of the dataset.", choices=dataset.valid_task_numbers)
+    parser.add_argument(dest="save_dir", type=str,
+                        help="Directory where the dataset will be saved, e.g. \"~/data/\". "
+                        "A new subdirectory will be created.")
 
-    print("Dataset will be saved to:\n  \"" + dataset_dir + "\"\n")
-    input("Press Enter to continue...")
+    # create task object
+    args, unknown = parser.parse_known_args()
+    all_args = sys.argv[1::]
+    task = dataset.make[args.task_num](args.save_dir, parser, all_args)
+
+    # prompt user
+    info = task.dataset_info
+    task.print_startup()
+    task.show_user_prompt()
+    dataset_dir = os.path.join(args.save_dir, task.name)
+    print("The dataset will be saved to:\n  \"" + dataset_dir + "\"\n")
+
+    data_subsets_dirs_dict = utils.get_data_subsets_dirs(dataset_dir, info["labels"])
+    if len(data_subsets_dirs_dict) > 0:
+        print("The following single-class data subsets will also be created:")
+        for val in data_subsets_dirs_dict.values():
+            print("  \"" + val + "\"")
+        input("\nPress Enter to continue...")
 
     # generate dataset images and labels
     imagesTr_dir = os.path.join(dataset_dir, "imagesTr")
     labelsTr_dir = os.path.join(dataset_dir, "labelsTr")
     os.makedirs(imagesTr_dir, exist_ok=True)
     os.makedirs(labelsTr_dir, exist_ok=True)
-    dataset.create_images_labels(imagesTr_dir, labelsTr_dir, args)
+    task.create_images_labels(imagesTr_dir, labelsTr_dir)
 
     # create separate test data
     imagesTs_dir = os.path.join(dataset_dir, "imagesTs")
@@ -41,7 +60,7 @@ def main():
     if len(info["labels"]) > 2:
         utils.make_data_subsets(dataset_dir, info["labels"])
 
-    print("Finished!")
+    print("\nFinished!")
 
 
 if __name__ == '__main__':
