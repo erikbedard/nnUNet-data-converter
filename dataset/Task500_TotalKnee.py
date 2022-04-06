@@ -1,5 +1,4 @@
 # external libraries
-import dicom2nifti
 import SimpleITK as sitk
 import nibabel
 import numpy as np
@@ -11,6 +10,7 @@ import sys
 import multiprocessing
 
 import dataset
+import utils
 
 
 class Task(dataset.Task.Task):
@@ -38,7 +38,6 @@ class Task(dataset.Task.Task):
 
     def _set_dataset_info(self):
         self.dataset_info = {
-            "task_name": "TotalKnee",
             "dataset_name": "OAI-ZIB",
             "modalities": ["MRI"],
             "license": "",
@@ -90,11 +89,11 @@ class Task(dataset.Task.Task):
         convert_mri_subset(self.oai_dir, self.oai_mri_paths, imagesTr_dir)
 
         # create labels
-        convert_all_masks(self.oai_zib_masks_dir, labelsTr_dir)
-        align_images_and_labels(imagesTr_dir, labelsTr_dir)
+        _convert_all_masks(self.oai_zib_masks_dir, labelsTr_dir)
+        _align_images_and_labels(imagesTr_dir, labelsTr_dir)
 
 
-def convert_all_masks(oai_zib_masks_dir, save_dir):
+def _convert_all_masks(oai_zib_masks_dir, save_dir):
     """
     Convert all the segmentation masks from the OAI ZIB data set to the nifti format with the naming convention required
     by nnU-Net.
@@ -115,7 +114,7 @@ def convert_all_masks(oai_zib_masks_dir, save_dir):
 
     # process masks
     p = multiprocessing.Pool()
-    p.map(convert_mhd_to_nifti, data)
+    p.map(_convert_mhd_to_nifti, data)
     p.close()
 
 
@@ -130,19 +129,13 @@ def convert_mri_subset(oai_data_dir, oai_mri_paths, save_dir):
     """
 
     path_dict = get_mri_list(oai_mri_paths)
-    num_scans = len(path_dict)
 
     # create data list for parallel processing
-    t0 = [oai_data_dir] * num_scans
-    t1 = path_dict.values()
-    t2 = [save_dir] * num_scans
-    t3 = path_dict.keys()
-    data = list(zip(t0, t1, t2, t3))
+    mri_dirs = list(os.path.join(oai_data_dir, rel_path) for rel_path in list(path_dict.values()))
+    save_paths = list(os.path.join(save_dir, image_id + '_0000.nii.gz') for image_id in list(path_dict.keys()))
 
     # process masks
-    p = multiprocessing.Pool()
-    p.map(convert_dicom_to_nifti, data)
-    p.close()
+    utils.convert_dicom_to_nifti(mri_dirs, save_paths)
 
 
 def get_mri_list(oai_mri_paths):
@@ -169,22 +162,8 @@ def get_mri_list(oai_mri_paths):
     return path_dict
 
 
-def convert_dicom_to_nifti(data):
-    # create read image filepath
-    data_dir = data[0]
-    image_rel_path = data[1]
-    old_dir = os.path.join(data_dir, image_rel_path)
-    print("Converting \"" + image_rel_path + "\"")
 
-    # create write image filepath
-    out_dir = data[2]
-    image_id = data[3]
-    new_file_name = image_id + '_0000.nii.gz'
-    new_file_path = os.path.join(out_dir, new_file_name)
-    dicom2nifti.convert_dicom.dicom_series_to_nifti(old_dir, new_file_path, reorient_nifti=False)
-
-
-def convert_mhd_to_nifti(data):
+def _convert_mhd_to_nifti(data):
     image_path = data[0]
     itk_image = sitk.ReadImage(image_path)
 
@@ -199,7 +178,7 @@ def convert_mhd_to_nifti(data):
     sitk.WriteImage(itk_image, new_file_path)
 
 
-def align_images_and_labels(images_dir, labels_dir):
+def _align_images_and_labels(images_dir, labels_dir):
     image_paths = glob.glob(os.path.join(images_dir, '*.nii.gz'))
     image_paths.sort()
 
@@ -211,11 +190,11 @@ def align_images_and_labels(images_dir, labels_dir):
 
     # process masks
     p = multiprocessing.Pool()
-    p.map(realign, data)
+    p.map(_realign, data)
     p.close()
 
 
-def realign(data):
+def _realign(data):
     im_path = data[0]
     lbl_path = data[1]
 

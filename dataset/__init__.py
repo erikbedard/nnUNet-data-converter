@@ -1,15 +1,17 @@
 # get list of all submodules
 from importlib import import_module
 from pathlib import Path
+import os
+
 __all__ = [
     import_module(f".{f.stem}", __package__)
     for f in Path(__file__).parent.glob("*.py")
     if "__" not in f.stem
 ]
-del import_module, Path
 
 # retrieve list of available Task modules
-length = len("dataset.TaskXXX")
+module_name = os.path.basename(Path(__file__).parent)
+length = len(module_name + ".TaskXXX")
 submodule_names = sorted(module.__name__.split('.')[1]
                          for module in __all__
                          if 'Task' in module.__name__

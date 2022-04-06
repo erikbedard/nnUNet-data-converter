@@ -1,9 +1,11 @@
+import nibabel
+import dicom2nifti
+import numpy as np
+
 import os
 import glob
 from pathlib import Path
 import shutil
-import nibabel
-import numpy as np
 import json
 import multiprocessing
 from typing import Tuple
@@ -42,9 +44,6 @@ def make_data_subsets(original_dataset_dir, seg_labels_dict):
     :return:
     """
     # gather info about dataset
-    #dataset_name = os.path.basename(original_dataset_dir)
-    #dataset_num = int(dataset_name.split("Task")[1].split("_")[0])  # Task###_name
-    #save_dir = Path(original_dataset_dir).parent
     data_subsets_dirs_dict = get_data_subsets_dirs(original_dataset_dir, seg_labels_dict)
 
     for key in seg_labels_dict.keys():
@@ -52,11 +51,6 @@ def make_data_subsets(original_dataset_dir, seg_labels_dict):
             continue
 
         # copy original data set as a starting point for new subset
-        #dataset_num = dataset_num + 1
-        #task_num = "%02d" % dataset_num
-        #new_dataset_name = seg_labels_dict[key].title().replace(" ", "")  # "this label' -> "ThisLabel"
-        #new_dataset_name = "Task" + task_num + "_" + new_dataset_name
-        #new_dataset_dir = os.path.join(save_dir, new_dataset_name)
         new_dataset_dir = data_subsets_dirs_dict[key]
         print("Creating data subset \"" + os.path.basename(new_dataset_dir) + "\"")
         print("  Copying files...")
@@ -92,9 +86,8 @@ def modify_labels(data):
     label = nibabel.nifti1.load(label_path)
     label_data = np.array(label.dataobj)
 
-    # set desired class labels to foreground and all other class labels to 0
-    label_data[label_data == class_num] = 1
-    label_data[label_data != class_num] = 0
+    # set desired class labels to foreground
+    label_data = (label_data == class_num).astype('uint8')
 
     label = nibabel.Nifti1Image(label_data, label.affine, header=label.header)
     nibabel.nifti1.save(label, label_path)
@@ -146,6 +139,20 @@ def split_training_data(imagesTr_dir, labelsTr_dir, train_percent=0.7, seed=0):
     for (image, label) in list(zip(imagesTs_paths, labelsTs_paths)):
         shutil.move(image, imagesTs_dir)
         shutil.move(label, labelsTs_dir)
+
+
+def convert_dicom_to_nifti(input_paths, output_paths):
+    data = list(zip(input_paths, output_paths))
+    p = multiprocessing.Pool()
+    p.map(_convert_dicom_to_nifti, data)
+    p.close()
+
+
+def _convert_dicom_to_nifti(data):
+    input_dir = data[0]
+    new_file_path = data[1]
+    print("Converting \"" + input_dir + "\"")
+    dicom2nifti.convert_dicom.dicom_series_to_nifti(input_dir, new_file_path, reorient_nifti=False)
 
 
 #    This code was copied from the nnU-Net repository with some modifications:
