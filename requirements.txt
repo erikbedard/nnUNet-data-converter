@@ -2,3 +2,6 @@ SimpleITK==2.0.2
 dicom2nifti
 numpy
 nibabel
+pandas
+connected-components-3d
+pyvista

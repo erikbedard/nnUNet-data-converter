@@ -66,7 +66,7 @@ def make_data_subsets(original_dataset_dir, seg_labels_dict):
         # modify label
         print("  Modifying labels...")
         data = list(zip(labels_paths, [key] * len(labels_paths)))
-        p = multiprocessing.Pool()
+        p = multiprocessing.Pool(os.cpu_count()-1)
         p.map(modify_labels, data)
         p.close()
 
@@ -112,8 +112,8 @@ def split_training_data(imagesTr_dir, labelsTr_dir, train_percent=0.7, seed=0):
 
     imagesTs_dir = os.path.join(parent_dir, 'imagesTs')
     labelsTs_dir = os.path.join(parent_dir, 'labelsTs')
-    os.mkdir(imagesTs_dir)
-    os.mkdir(labelsTs_dir)
+    os.makedirs(imagesTs_dir, exist_ok=True)
+    os.makedirs(labelsTs_dir, exist_ok=True)
 
     # get lists of exiting files
     imagesTr_paths = glob.glob(os.path.join(imagesTr_dir, '*.nii.gz'))
@@ -143,7 +143,7 @@ def split_training_data(imagesTr_dir, labelsTr_dir, train_percent=0.7, seed=0):
 
 def convert_dicom_to_nifti(input_paths, output_paths):
     data = list(zip(input_paths, output_paths))
-    p = multiprocessing.Pool()
+    p = multiprocessing.Pool(os.cpu_count()-1)
     p.map(_convert_dicom_to_nifti, data)
     p.close()
 
@@ -157,7 +157,7 @@ def _convert_dicom_to_nifti(data):
 
 #    This code was copied from the nnU-Net repository with some modifications:
 #    - removed dependency on batchgenerators
-#    - added dataset stats
+#    - TODO: add dataset stats
 #
 #
 #    Copyright 2020 Division of Medical Image Computing, German Cancer Research Center (DKFZ), Heidelberg, Germany
