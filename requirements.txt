@@ -5,3 +5,5 @@ nibabel
 pandas
 connected-components-3d
 pyvista
+tqdm
+imageio-ffmpeg

@@ -15,7 +15,7 @@ from statistics import mode
 
 import dataset
 import utils
-import visualize
+from visualize import compare_masks, visualize
 
 
 class Task(dataset.Task.Task):
@@ -130,9 +130,76 @@ def _convert_all_masks(shoulder_id_list, scapula_mask_list, humerus_mask_list, l
     data = list(zip(shoulder_id_list, scapula_mask_list, humerus_mask_list, labelsTr_dir_list, verify_integrity_list))
 
     # process masks
-    p = multiprocessing.Pool(os.cpu_count()-1)
-    p.map(_process_masks, data)
+    p = multiprocessing.Pool(int(os.cpu_count()/4))
+    result = p.map(_process_masks, data)
     p.close()
+
+    # TODO: refactor the saving of JSON files as its own method
+
+    def sort_by_key(dictionary):
+        sorted_keys = sorted(dictionary.keys())
+        sorted_dict = {}
+        for key in sorted_keys:
+            sorted_dict[key] = dictionary[key]
+        return sorted_dict
+
+    issues_dict_by_id = sort_by_key(dict(result))
+
+    # separate results into separate dicts
+    bad_input_dict = {}
+    disconnected_dict = {}
+    overlap_dict = {}
+    holes_dict = {}
+    no_issues_list = []
+    for data_id, issues in issues_dict_by_id.items():
+        if issues:
+
+            # sort issues into separate dicts
+            # TODO: the separate dicsts are current broken: they need to allow for multiple descriptions to be saved to
+            #  each id (currently only one issue is saved, and saving subsequent issues overwrites what's already there)
+            for issue in issues:
+                issue_type = issue[0]
+                issue_desc = issue[1]
+                if issue_type == "BAD INPUT": bad_input_dict[data_id] = issue_desc
+                elif issue_type == "DISCONNECTED": disconnected_dict[data_id] = issue_desc
+                elif issue_type == "OVERLAP": overlap_dict[data_id] = issue_desc
+                elif issue_type == "HOLES": holes_dict[data_id] = issue_desc
+                else:
+                    raise RuntimeError
+
+        else:
+            no_issues_list.append(data_id)
+
+    issues_dict_by_issue = {
+        "NO ISSUES": no_issues_list,
+        "BAD INPUT": sort_by_key(bad_input_dict),
+        "DISCONNECTED": sort_by_key(disconnected_dict),
+        "OVERLAP": sort_by_key(overlap_dict),
+        "HOLES": sort_by_key(holes_dict)
+    }
+
+    summary_dict = {
+        "Number shoulders": len(issues_dict_by_id),
+        "Number shoulders with issues": len(issues_dict_by_id) - len(no_issues_list),
+        "Number of masks": len(issues_dict_by_id) * 2,
+        "Number of masks with bad input": len(bad_input_dict),
+        "Number of masks with disconnected regions": len(disconnected_dict),
+        "Number of masks with holes": len(holes_dict),
+        "Number of shoulders with overlapping masks": len(overlap_dict)
+    }
+
+    import json
+    json_path_by_issue = os.path.join(labelsTr_dir, "data_quality_by_issue.json")
+    with open(json_path_by_issue, "w") as file:
+        json.dump(issues_dict_by_issue, file, indent=4)
+
+    json_path_by_id = os.path.join(labelsTr_dir, "data_quality_by_id.json")
+    with open(json_path_by_id, "w") as file:
+        json.dump(issues_dict_by_id, file, indent=4)
+
+    summary_json_path = os.path.join(labelsTr_dir, "data_quality_summary.json")
+    with open(summary_json_path, "w") as file:
+        json.dump(summary_dict, file, indent=4)
 
 
 def _process_masks(data):
@@ -182,48 +249,59 @@ def _process_masks(data):
 
         return largest_region, small_region_frequencies
 
+    warning_list = []
+    sep = os.linesep
     if verify_integrity:
-        warning_string = ""
+        scapula_is_modified = False
+        humerus_is_modified = False
 
         # check that inputs have only two unique label values
         num_labels = len(np.unique(scapula_input))
         if num_labels != 2:
-            warning_string += "• Scapula input mask has " + str(num_labels) + " labels but exactly two were expected " \
-                              + "(foreground and background). The largest label (by volume) is assumed to be background " \
-                              + "and all other labels are assumed to be foreground." + os.linesep
+            scapula_is_modified = True
+            warning_list.append(
+                ("BAD INPUT",
+                ["Scapula input mask has " + str(num_labels) + " labels but exactly two were expected (foreground and background).",
+                "The largest label (by volume) is assumed to be background and all other labels are assumed to be foreground."])
+            )
 
         num_labels = len(np.unique(humerus_input))
         if num_labels != 2:
-            warning_string += "• Humerus input mask has " + str(num_labels) + " labels but exactly two were expected " \
-                              + "(foreground and background). The largest label (by volume) is assumed to be background " \
-                              + "and all other labels are assumed to be foreground." + os.linesep
+            humerus_is_modified = True
+            warning_list.append(
+                ("BAD INPUT",
+                ["Humerus input mask has " + str(num_labels) + " labels but exactly two were expected (foreground and background).",
+                "The largest label (by volume) is assumed to be background and all other labels are assumed to be foreground."])
+            )
 
         # ensure masks are a singly connected region
         # check scapula
         regions, num_regions, region_sizes = calc_regions(scapula)
-        scapula_is_modified = False
         if num_regions > 1:
             largest_region, small_region_frequencies = get_largest_region_and_small_region_frequencies(regions, region_sizes)
             scapula = largest_region
             scapula_is_modified = True
 
-            warning_string += "• Scapula has " + str(num_regions) + " disconnected regions. " \
-                              + "Only the largest region has been kept. " \
-                              + "The smaller disconnected region frequencies are {region_size: frequency}: " + os.linesep \
-                              + "  " + str(small_region_frequencies) + os.linesep
+            warning_list.append(
+                ("DISCONNECTED",
+                ["Scapula has " + str(num_regions) + " disconnected regions. Only the largest region has been kept.",
+                "The smaller disconnected region frequencies are {region_size: frequency}:",
+                str(small_region_frequencies)])
+            )
 
         # check humerus
         regions, num_regions, region_sizes = calc_regions(humerus)
-        humerus_is_modified = False
         if num_regions > 1:
             largest_region, small_region_frequencies = get_largest_region_and_small_region_frequencies(regions, region_sizes)
             humerus = largest_region
             humerus_is_modified = True
 
-            warning_string += "• Humerus has " + str(num_regions) + " disconnected regions. " \
-                              + "Only the largest region has been kept. " \
-                              + "The smaller disconnected region frequencies are {region_size: frequency}: " + os.linesep \
-                              + "  " + str(small_region_frequencies) + os.linesep
+            warning_list.append(
+                ("DISCONNECTED",
+                ["Humerus has " + str(num_regions) + " disconnected regions. Only the largest region has been kept.",
+                "The smaller disconnected region frequencies are {region_size: frequency}:",
+                str(small_region_frequencies)])
+            )
 
         # ensure masks do not overlap, assume scapula is more correct, so modify humerus if needed
         overlap = humerus * scapula
@@ -235,10 +313,13 @@ def _process_masks(data):
             data = pd.Series(region_sizes)
             region_frequencies = dict(data.value_counts(sort=False))
 
-            warning_string += "• Scapula and humerus masks have " + str(num_regions) + " overlapping region(s). " \
-                              + "The humerus mask has been modified to remove the overlap. " \
-                              + "The overlap region frequencies are {region_size: frequency}: " + os.linesep \
-                              + "  " + str(region_frequencies) + os.linesep
+            warning_list.append(
+                ("OVERLAP",
+                ["Scapula and humerus masks have " + str(num_regions) + " overlapping region(s).",
+                "The humerus mask has been modified to remove the overlap.",
+                "The overlap region frequencies are {region_size: frequency}:",
+                str(region_frequencies)])
+            )
 
         # fill holes
         structure = np.ones((3, 3, 3))  # 26-connectivity
@@ -252,10 +333,12 @@ def _process_masks(data):
             data = pd.Series(region_sizes)
             region_frequencies = dict(data.value_counts(sort=False))
 
-            warning_string += "• Scapula has " + str(num_regions) + " hole(s). " \
-                              + "The mask has been modified to fill the hole(s). " \
-                              + "The hole region frequencies are {region_size: frequency}: " + os.linesep \
-                              + "  " + str(region_frequencies) + os.linesep
+            warning_list.append(
+                ("HOLES",
+                ["Scapula has " + str(num_regions) + " hole(s). The mask has been modified to fill the hole(s).",
+                "The hole region frequencies are {region_size: frequency}:",
+                str(region_frequencies)])
+            )
 
         humerus_filled = ndimage.binary_fill_holes(humerus, structure=structure)
         holes = humerus_filled * (humerus == 0).astype("uint8")
@@ -267,13 +350,23 @@ def _process_masks(data):
             data = pd.Series(region_sizes)
             region_frequencies = dict(data.value_counts(sort=False))
 
-            warning_string += "• Humerus has " + str(num_regions) + " hole(s). " \
-                              + "The mask has been modified to fill the hole(s). " \
-                              + "The hole region frequencies are {region_size: frequency}: " + os.linesep \
-                              + "  " + str(region_frequencies) + os.linesep
+            warning_list.append(
+                ("HOLES",
+                ["Humerus has " + str(num_regions) + " hole(s). The mask has been modified to fill the hole(s).",
+                "The hole region frequencies are {region_size: frequency}:",
+                str(region_frequencies)])
+            )
 
-        if warning_string != "":
-            print("WARNING: Shoulder \"" + shoulder_id + "\" has the following issue(s):" + os.linesep + warning_string)
+        print_str = ""
+        if warning_list:
+            print_str += "WARNING: Shoulder \"" + shoulder_id + "\" has the following issue(s):" + sep
+            for item in warning_list:
+                type = item[0]
+                desc = item[1]
+                print_str += "  " + type + ': ' + sep
+                for line in desc:
+                    print_str += "    " + line + sep
+            print(print_str)
 
     label = scapula + humerus*2
 
@@ -300,10 +393,14 @@ def _process_masks(data):
             del scapula_copy
             del ni_scapula
 
-            scapula_screenshot = os.path.join(save_dir, shoulder_id + "_scapula.png")
-            visualize.visualize_two_masks(temp_scapula_path, 1, label_path, 1,
-                                          opacities=(0.1, 0.8, 0.8),
-                                          screenshot_path=scapula_screenshot)
+            # save visualization using CLI
+            # TODO: modify visualization code to remove tqdm prompt and replace with simple "Saving visuals" msg
+            scapula_video_path = os.path.join(save_dir, shoulder_id + "_scapula_quality.mp4")
+            args = [temp_scapula_path, label_path, '--ref_label_num', '1', '--comp_label_num', '1',
+                    '--opacities', '0.2', '1', '1', '--video_path', scapula_video_path, '--background']
+            visualize.exec_cli(compare_masks.main, args)
+
+
             time.sleep(1)
             os.close(scapula_fd)
             time.sleep(1)
@@ -317,11 +414,15 @@ def _process_masks(data):
             del humerus_copy
             del ni_humerus
 
-            humerus_screenshot = os.path.join(save_dir, shoulder_id + "_humerus.png")
-            visualize.visualize_two_masks(temp_humerus_path, 1, label_path, 2,
-                                          opacities=(0.1, 0.8, 0.8),
-                                          screenshot_path=humerus_screenshot)
+            # save visualization using CLI
+            humerus_video_path = os.path.join(save_dir, shoulder_id + "_humerus_quality.mp4")
+            args = [temp_humerus_path, label_path, '--ref_label_num', '1', '--comp_label_num', '2',
+                    '--opacities', '0.2', '1', '1', '--video_path', humerus_video_path, '--background']
+            utils.exec_cli(compare_masks.main, args)
+
             time.sleep(1)
             os.close(humerus_fd)
             time.sleep(1)
             os.remove(temp_humerus_path)
+
+    return shoulder_id, warning_list
